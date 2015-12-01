@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Ask user about screen locking and do it if no response
+#
+zenity --text "Не блокировать комп?" --timeout=3 --question --modal
+
+result=$?
+echo "Answer is "$result
+
+case $result in
+1|5)
+	gnome-screensaver-command -l
+	;;
+esac
+

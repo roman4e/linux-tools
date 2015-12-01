@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Move firefox to the left display
+#
+
+get_window_id() {
+    get_window_id_result=$(wmctrl -l | grep "$1" | tail -1 | cut -f1 -d" ")
+}
+
+get_window_id "Mozilla Firefox"
+wmctrl -i -r "$get_window_id_result" -b remove,maximized_vert,maximized_horz
+wmctrl -i -r "$get_window_id_result" -e 0,0,0,-1,-1
+wmctrl -i -r "$get_window_id_result" -b add,maximized_vert,maximized_horz
+echo $get_window_id_result
+get_window_id "Session Manager"
+wmctrl -i -r "$get_window_id_result" -e 0,0,0,-1,-1
+
+mousex=$(xdotool getmouselocation | cut -d" " -f1 | cut -d: -f2)
+mousey=$(xdotool getmouselocation | cut -d" " -f2 | cut -d: -f2)
+if [ $mousex -gt 1920 ]; then
+	xdotool mousemove 860 $mousey
+fi
+
+xdotool search --name "Session Manager" key --window %1 Return
+echo $get_window_id_result
+echo $?
