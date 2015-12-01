@@ -1,0 +1,8 @@
+#!/bin/sh
+#
+# enumerate each file with leading zeros
+#
+
+zeros=3
+
+ls -1rat | awk '/^[^.]/{name=sprintf("%0'$zeros'i - %s",++i,$0);system("mv \""$0"\" \""name"\"")}'
