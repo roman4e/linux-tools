@@ -1,0 +1,118 @@
+#!/bin/bash
+
+defuser=captain
+uhome=/home/$defuser
+
+if [ $# -lt 2 ]; then
+	if [ $EUID -ne 0 ]; then
+		echo "Run as root!"
+	fi
+	echo "Usage: [-t hosttype] [-p params] <hostdir[/domain]> [domain]"
+	echo "Use hostdir/domain joined with / or separated"
+	echo "Host types: 1 1c[onf] 2 2c[onf]"
+	echo "Host type = 2 or 2c, you must specify dirname: hostdir/dirname domain.com"
+	echo
+	echo "Examples:"
+	echo "addhost abc domain.com               - add domain.com type 1 into abc hostspace"
+	echo "addhost abc/domain.com               - same"
+	echo "addhost abc/otherdir domain.com      - conflict, must use type 2 or 2c"
+	echo "addhost abc/otherdir domain.com -t 2 - add domain.com type 1 into abc hostspace and placed in otherdir"
+	exit
+fi
+
+if [ $EUID -ne 0 ]; then
+	echo "Run as root!"
+	exit
+fi
+
+hosttype=1c
+while getopts ":t:p:" opt "$@"
+do
+	case $opt in
+	t)
+		case $OPTARG in
+		1)	hosttype=1h ;;
+		1c|1conf)	hosttype=1c ;;
+		2)	hosttype=2h ;;
+		2c|2conf)	hosttype=2c ;;
+		*)	echo "Undefined hosttype $3"; exit ;;
+		esac ;;
+	p)
+		;;
+	esac
+done
+
+#prelast
+grp=${@:$OPTIND:1}
+grp=${grp%/}
+grp=${grp//https/}
+grp=${grp//http/}
+grp=${grp//:\/\//}
+grp0=`basename $grp`
+# if place is specified
+if [ .$grp. != .$grp0. ]; then
+	dom0=(${dom//\// })
+	if [ ${#dom} -gt 2 ]; then
+		echo "Error: wrong using of hostdir/domain argument: "$dom0
+		exit
+	fi
+	#place=${dom0[${#dom0[@]}-2]}
+	#domain=${dom0[${#dom0[@]}-1]}
+	hostspace=${dom0[0]}
+	domdir=${dom0[1]}
+	domain=${@:$OPTIND+1:1}
+	if [ .$domain. = .. ]; then
+		domain=$hostspace
+	fi
+	usagetype=2
+else
+	hostspace=$grp0
+	domain=${@:$OPTIND+1:1}
+	domdir=$domain
+	usagetype=1
+fi
+
+#remove http[s]://
+domain=${domain//https/}
+domain=${domain//http/}
+domain=${domain/:\/\//}
+
+if [ $usagetype -gt 1 ]; then
+	if [ "$hosttype" = "1h" -o "$hosttype" = "1c" ]; then
+		echo "Error: cannot use hostdir/dir domain.com with hosttype 1 or 1c"
+		exit
+	fi
+fi
+
+echo Adding to hosts
+grephost=`grep "$domain" /etc/hosts`
+
+if [ -z "$grephost" ]; then
+	#echo add new
+	sed '/#end_vhosts#/s/#end_vhosts#/127.0.0.1\t'$domain'\n#end_vhosts#/' /etc/hosts > /etc/hosts_new
+	mv /etc/hosts_new /etc/hosts
+else
+	#echo change old
+	sed '/'$domain'/s/.*/127.0.0.1\t'$domain'/' /etc/hosts > /etc/hosts_new
+	mv /etc/hosts_new /etc/hosts
+fi
+
+#echo DEBUG grp=$grp domain=$domain hosttype=$hosttype
+
+echo Adding virtual hosting
+if [ -e "$uhome/Hosting/$hostspace" ]; then
+	hostdir="$uhome/Hosting/$hostspace/$domdir"
+	if [ -e "$hostdir" ]; then
+		echo "Directory $hostdir exists"
+	else
+		sudo -u $defuser mkdir -p "$hostdir"
+	fi
+else
+	echo Cannot stat dir "$uhome/Hosting/$hostspace"
+	exit
+fi
+
+# create config
+if [ "$hosttype" = "1c" -o "$hosttype" = "2c" ]; then
+	sudo -u $defuser touch "$hostdir/../.config/$domain.conf"
+fi
