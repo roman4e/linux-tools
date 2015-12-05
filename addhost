@@ -147,6 +147,5 @@ else
 fi
 sudo -u $defuser mv -f $confdir/vhosts_tmp $confdir/vhosts
 
-exit
 echo Restarting apache
 apache2ctl restart
