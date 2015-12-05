@@ -6,9 +6,9 @@ uhome=/home/$defuser
 if [ $# -lt 2 ]; then
 	if [ $EUID -ne 0 ]; then
 		echo "Run as root!"
+		echo
 	fi
-	echo "Usage: [-t hosttype] [-p params] <hostdir[/domain]> [domain]"
-	echo "Use hostdir/domain joined with / or separated"
+	echo "Usage: [-t hosttype] [-p params] <hostdir[/otherdir]> <domain>"
 	echo "Host types: 1 1c[onf] 2 2c[onf]"
 	echo "Host type = 2 or 2c, you must specify dirname: hostdir/dirname domain.com"
 	echo
@@ -16,7 +16,7 @@ if [ $# -lt 2 ]; then
 	echo "addhost abc domain.com               - add domain.com type 1 into abc hostspace"
 	echo "addhost abc/domain.com               - same"
 	echo "addhost abc/otherdir domain.com      - conflict, must use type 2 or 2c"
-	echo "addhost abc/otherdir domain.com -t 2 - add domain.com type 1 into abc hostspace and placed in otherdir"
+	echo "addhost -t 2 abc/otherdir domain.com - add domain.com type 2 into abc hostspace and placed in otherdir"
 	exit
 fi
 
@@ -45,9 +45,9 @@ done
 #prelast
 grp=${@:$OPTIND:1}
 grp=${grp%/}
-grp=${grp//https/}
-grp=${grp//http/}
-grp=${grp//:\/\//}
+grp=${grp/https/}
+grp=${grp/http/}
+grp=${grp/:\/\//}
 grp0=`basename $grp`
 # if place is specified
 if [ .$grp. != .$grp0. ]; then
@@ -73,8 +73,9 @@ else
 fi
 
 #remove http[s]://
-domain=${domain//https/}
-domain=${domain//http/}
+domain=${domain%/}
+domain=${domain/https/}
+domain=${domain/http/}
 domain=${domain/:\/\//}
 
 if [ $usagetype -gt 1 ]; then
@@ -100,8 +101,10 @@ fi
 #echo DEBUG grp=$grp domain=$domain hosttype=$hosttype
 
 echo Adding virtual hosting
+hostdir="$uhome/Hosting/$hostspace/$domdir"
+confdir="$hostdir/../.config"
+
 if [ -e "$uhome/Hosting/$hostspace" ]; then
-	hostdir="$uhome/Hosting/$hostspace/$domdir"
 	if [ -e "$hostdir" ]; then
 		echo "Directory $hostdir exists"
 	else
@@ -114,5 +117,36 @@ fi
 
 # create config
 if [ "$hosttype" = "1c" -o "$hosttype" = "2c" ]; then
-	sudo -u $defuser touch "$hostdir/../.config/$domain.conf"
+	sudo -u $defuser touch "$confdir/$domain.conf"
 fi
+
+hostfound=`grep -e"Use VHost.*$domain" $confdir/vhosts`
+if [ -f $confdir/vhosts_tmp ]; then
+	rm -f $confdir/vhosts_tmp
+fi
+sudo -u $defuser touch $confdir/vhosts_tmp
+
+echo Adding to vhosts
+case $hosttype in
+1h)
+	hstr="Use VHost1 \"$domain\"";;
+1c)
+	hstr="Use VHost1Conf \"$domain\"";;
+2h)
+	hstr="Use VHost2 \"$domdir\" \"$domain\"";;
+2c)
+	hstr="Use VHost2Conf \"$domdir\" \"$domain\"";;
+esac
+
+if [ "$hostfound" ]; then
+	sudo -u $defuser sed '/'$domain'/s/.*/'"$hstr"'/' $confdir/vhosts >> $confdir/vhosts_tmp
+else
+	cat $confdir/vhosts | awk '/^[^\s]+/ { print $0; }' >> $confdir/vhosts_tmp
+	echo $hstr >> $confdir/vhosts_tmp
+	echo >> $confdir/vhosts_tmp
+fi
+sudo -u $defuser mv -f $confdir/vhosts_tmp $confdir/vhosts
+
+exit
+echo Restarting apache
+apache2ctl restart
