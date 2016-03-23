@@ -1,0 +1,75 @@
+#!/bin/bash
+phpbin=`which php`
+if [ "$phpbin" == "" ]; then
+	echo "php not found"
+	exit 1
+fi
+
+prefix=${phpbin%/bin/php}
+phpver=`$phpbin -v|cut -f 2 -d" "|head -1|cut -f 1 -d.`
+
+echo "prefix=$prefix, version=$phpver"
+
+if [ $UID -gt 0 ]; then
+	echo "Run as root!"
+	exit 1
+fi
+
+function rmfiles()
+{
+	path=$1
+	path=${path%/}"/"
+	ext=$3
+	files=$2
+	#echo ${files[*]}
+	for f in ${files[*]}; do
+		fn=$f$ext
+		#echo $f
+		if [[ $f == *[?*]* ]]; then
+			rm -f $path$f
+		elif [ -f "$path$fn" ]; then
+			rm -f $path$fn
+		fi
+	done
+}
+
+
+apache2ctl stop
+test -f /etc/apache2/mods-enabled/php$phpver.load && rm -f /etc/apache2/mods-enabled/php$phpver.load
+apache2ctl start
+
+#remove apache mod
+f="/usr/lib/apache2/modules/libphp"$phpver".so"
+if [ -f $f ]; then
+	rmfiles "/usr/lib/apache2/modules/" libphp$phpver.so
+	#echo rm -f "/usr/lib/apache2/modules/libphp"$phpver".so"
+fi
+
+#remove all php modules
+if [ -d "/usr/local/lib/php/20151012/" ]; then
+	rmfiles "/usr/local/lib/php/20151012/" "*.so"
+	#echo rm -rf "/usr/local/lib/php/20151012/*.so"
+fi
+
+files=(php php-cgi php-config phpdbg phpize phar phar.phar pecl pear peardev)
+
+if [ -f $prefix"/bin/php" ]; then
+	rmfiles $prefix"/bin" $files
+fi
+
+if [ -f $prefix"/sbin/php-fpm" ]; then
+	rmfiles $prefix"/bin" $files
+fi
+
+if [ -f $prefix"/share/man/man1/php.1" ]; then
+	rmfiles $prefix"/share/man/man1" $files ".1"
+fi
+
+if [ -f $prefix"/share/man/man8/php-fpm.8" ]; then
+	rmfiles $prefix"/share/man/man8" $files ".8"
+fi
+
+
+if [ -d $prefix"/include/php" ]; then
+	rm -rf $prefix"/include/php"
+fi
