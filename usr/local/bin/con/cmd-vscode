@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ -n "$1" ]; then
+	userdirparam="--user-data-dir=$HOME/.vscode/user-dirs/$1"
+fi
+
+$HOME/bin/vscode $userdirparam

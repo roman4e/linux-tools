@@ -1,0 +1,27 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+	echo "error: Specify directory"
+	echo "usage: packproj <archive> [dir]"
+	exit 1
+fi
+
+arch="$1"
+aext="tar.gz"
+if [ ! "${arch%*.tar.gz}" = "$arch" ]; then
+	arch="${arch%*.tar.gz}"
+	aext="tar.gz"
+else 
+	if [ ! "${arch%*.tgz}" = "$arch" ]; then
+		arch="${arch%*.tgz}"
+		aext="tgz"
+	fi
+fi
+
+dir="$1"
+
+if [ ! -z "$2" ]; then
+	dir="$2"
+fi
+
+tar -czf "$arch.$aext" --exclude=node_modules --exclude=.git "$dir"

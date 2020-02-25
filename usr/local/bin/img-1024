@@ -1,0 +1,26 @@
+#!/bin/bash
+
+if [ "$1" == "-?" ]; then
+	echo "Resize image to 1024 by longest side (width or height)"
+	echo "Usage: img-1024 <image> [images...]"
+	exit 1
+fi
+
+imgsize=$(identify "$1"|cut -d ' ' -f 3,3)
+imgw=$(echo "$imgsize"|cut -dx -f 1,1)
+imgh=$(echo "$imgsize"|cut -dx -f 2,2)
+
+fullname="$1"
+shift
+while [ -n "$fullname" ]; do
+outname=${fullname%.*}
+ext=${fullname##*.}
+
+convert "$fullname" -resize "1024x1024^" "$outname.x1024.$ext"
+fullname="$1"
+shift
+done
+#if [ $imgw -gt $imgh ]; then
+#	
+#else
+#fi

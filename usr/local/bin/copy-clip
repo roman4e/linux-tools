@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [ "$1" == "-?" ] || [ -z "$1" ]; then
+	echo "Copy contents of the file to the clipboard"
+	exit 1
+fi
+
+if [ "$1" == "-" ]; then
+	xclip -selection c
+else
+	cat "$1" |xclip -selection c
+fi

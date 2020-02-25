@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ -n "$1" ]; then
+	profile="--user-data-dir=/home/$USER/snap/chromium/current/.config/chromium-$1"
+fi
+
+/bin/chromium-browser $profile

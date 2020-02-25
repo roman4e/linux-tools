@@ -1,0 +1,76 @@
+#!/bin/bash
+
+#set -x
+
+if [ $(id -u) -gt 0 ]; then
+	echo "Must run under root"
+	exit 1
+fi
+
+d=`dirname $0`
+
+source "$d/fn/atoi"
+
+NS="networkname"
+VETH="veth-$NS"
+VPEER="veth0"
+WAN_ETH="wlp0s20f3" # "eth0"
+
+VETH_MASK="24"
+VETH_ADDR="192.168.xx.1"
+VPEER_ADDR="192.168.xx.2"
+
+#veth_mask=${VETH_MASK##*/}
+#case "$veth_mask" in
+#	30) ;;
+#	28) ;;
+#	24) ;;
+#	16) ;;
+#	8) ;;
+#	*) echo "Error: unsupported mask /$veth_mask"; exit 1;;
+#esac
+
+#veth_mask_cut=${VETH_MASK}
+
+mkdir -p /etc/netns/$NS
+if [ ! -f /etc/netns/$NS/resolv.conf ]; then
+#	echo "nameserver 127.0.0.53\nnameserver 193.34.216.3\nnameserver 193.34.216.4\n" > /etc/netns/$NS/resolv.conf
+	echo "nameserver 8.8.8.8\nnameserver 8.8.4.4\n" > /etc/netns/$NS/resolv.conf
+fi
+
+ip netns del $NS &>/dev/null
+ip netns add $NS
+#create veth link
+ip link delete ${VETH} &>/dev/null
+ip link add ${VETH} type veth peer name ${VPEER} netns $NS
+#link peer with net ns
+#ip link set ${VPEER} netns $NS
+#iptables -D FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT &>/dev/null
+#iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+
+ip addr add ${VETH_ADDR}/${VETH_MASK} dev ${VETH}
+ip link set ${VETH} up
+
+# setup peer
+ip netns exec $NS ip addr add ${VPEER_ADDR}/${VETH_MASK} dev ${VPEER}
+ip netns exec $NS ip link set ${VPEER} up
+ip netns exec $NS ip link set lo up
+ip netns exec $NS route add default gw ${VETH_ADDR}
+
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+#iptables -P FORWARD DROP
+#iptables -F FORWARD
+
+#iptables -t nat -F
+
+iptables -t nat -A POSTROUTING -s ${VETH_ADDR}/24 -o ${WAN_ETH} -j MASQUERADE
+
+iptables -D FORWARD -i ${WAN_ETH} -o ${VETH} -j ACCEPT &>/dev/null
+iptables -D FORWARD -i ${VETH} -o ${WAN_ETH} -j ACCEPT &>/dev/null
+
+iptables -A FORWARD -i ${WAN_ETH} -o ${VETH} -j ACCEPT
+iptables -A FORWARD -i ${VETH} -o ${WAN_ETH} -j ACCEPT
+

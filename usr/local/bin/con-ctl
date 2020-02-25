@@ -1,0 +1,27 @@
+#!/bin/bash
+if [ -n "$DEBUG" ]; then
+	set -x
+fi
+
+cmd="$1"
+shift
+
+if [ -z "$cmd" ]; then
+	cmd=help
+fi
+
+export CON_WORK_DIR=$(dirname $0)/con
+
+usage() {
+	echo "Usage: con-ctl <command> [args...]"
+	echo "Commands:"
+	echo " exec                  - execute predefined app"
+	echo " help                  - this help"
+	echo -e "\nCommands are defined in $CON_WORK_DIR directory"
+}
+
+case $cmd in
+	exec) $CON_WORK_DIR/con-exec "$@";;
+	help) usage; exit 1 ;;
+esac
+

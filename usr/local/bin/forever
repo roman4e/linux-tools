@@ -1,0 +1,18 @@
+#!/bin/bash
+
+usage() {
+	echo "forever <seconds> <program> [args]"
+}
+
+timing=$1
+prog=$2
+shift
+if [ -z "$timing" ] || [ -z "$prog" ]; then
+	usage()
+	exit 1
+fi
+
+while :; do
+	$prog $*
+	sleep $timing
+done

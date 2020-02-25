@@ -1,0 +1,27 @@
+#!/bin/bash
+
+getToken() {
+	grep Token | cut -f 2,2 -d" "
+}
+
+#authenticator is a nodejs package
+gauth=authenticator
+
+ts=$(expr $(date +"%S") % 30)
+
+if [ $ts -lt 3 ]; then
+	sec=$(expr 3 - $ts)
+	echo -n "waiting $sec seconds for the loop begin"
+	sleep $sec
+	echo -ne "\r                                           \r"
+elif [ $ts -gt 22 ]; then
+	sec=$(expr 32 - $ts)
+	echo -n "waiting $sec seconds for the loop end"
+	sleep $sec
+	echo -ne "\r                                           \r"	
+fi
+
+case "$1" in
+	example)
+		$gauth --key "EXAMPLEKEY0EXAMPLEKEY1EXAMPLEKEY2" | getToken ;;
+esac

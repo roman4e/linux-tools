@@ -1,0 +1,48 @@
+#!/bin/bash -x
+
+winclass=2396
+winorg=gnome-terminal-server.Gnome-terminal
+
+has_option() {
+  look="$1"
+  shift
+  for i in "$@"; do
+  	if [ "$look" == "$i" ]; then echo yes; fi
+  done
+  echo no
+}
+
+current_desktop() {
+  wmctrl -d|grep "* DG"|cut -d' ' -f1,1
+}
+
+find_term() {
+  curdesk=$(current_desktop)
+  wmctrl -i -p -x -v |grep "$winorg"
+}
+
+current_window_id(){
+   xdotool getactivewindow|xargs printf "0x%x"
+}
+
+open_gnome_terminal_tab() {
+
+#assume that it running from current terminal
+WID=`xprop -root | grep "_NET_ACTIVE_WINDOW(WINDOW)"| awk '{print $5}'`
+#WID=$(current_window_id)
+if [ -n "$WID" ]; then
+	xdotool windowfocus $WID
+	xdotool key ctrl+shift+t
+	echo $(has_option "-a" $*)
+	if [ $(has_option "-a" $*) == yes ]; then wmctrl -i -a $WID; fi
+else
+	gnome-terminal -q 2>&1 >/dev/null &
+fi
+}
+
+if [ -n $(which gnome-terminal) ]; then open_gnome_terminal_tab $*
+elif [ -n $(which xterm-256) ]; then xterm-256 2>&1 >/dev/null &
+else echo "Terminal not found"; exit 1
+fi
+
+

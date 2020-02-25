@@ -1,0 +1,146 @@
+#!/usr/bin/bash
+
+[ -n "$DEBUG" ] && set -x
+
+source "$(dirname $0)/fn/shargs"
+source "$(dirname $0)/fn/debug"
+
+#PS4="`basename $0`"'(${LINENO})`[ $DEBUG_BY_LINE ] && read -s -N 1 -r DBGKEY && debug_handler "$DBGKEY"`# '
+PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]-main}():[${SHLVL},${BASH_SUBSHELL},e=$?]`[ $DEBUG_BY_LINE ] && read -s -N 1 -r DBGKEY && debug_handler "$DBGKEY"`# '
+usage() {
+    echo "enter-ns [options] <ns-name> [args...]"
+    echo "Options:"
+    echo " --root            - run as root, don't switch to current user"
+    echo " --detach          - detach subshell command"
+}
+#configure here
+usr=$USER
+uid=$(id -u)
+default_user="your_user_name"
+conctldir="/home/$default_user/bin"
+#end configure
+
+if [ "$default_user" == "your_user_name" ]; then
+	echo "Please configure first!"
+	exit 1
+fi
+
+# option name mapper
+parse_shargs_optsel()
+{
+	local arg1="$1"
+	local arg2="$2"
+	case "$arg1" in
+		root)     echo "root";		return 0;;
+		detach|d) echo "detach";	return 0;;
+		script|s) echo "script";	return 0;;
+	esac
+	return 1
+}
+
+# positional parameter mapper
+parse_shargs_posval()
+{
+	local argnum="$1"
+	local arg1="$2"
+	case "$argnum" in
+		"1")		  echo "ns";        return 0;;
+	esac
+	return 0
+}
+
+# SHARG_LONG=(root detach ext:e optional:o)
+# SHARG_SHORT=(s)
+# l|long, s|short, d|desc|description, a|arg=o|optional|r|required|n|na|notallowed, r|require, i|inc|incompatible
+# t|type=i|int|h|hex|s|string|b|bool<yes,no,true,false,1,0>|e|enum e|enum=<list> 
+SHARG_OPTS=(root detach ext o)
+SHARG_OPT_root=(long=root, desc="run as root, don't switch to current user", type=b)
+SHARG_OPT_detach=(l=detach, s=d, d="detach subshell command", type=b)
+SHARG_OPT_ext=(s=e,a=r)
+SHARG_OPT_optional=(short=o,arg=optional)
+SHARG_OPTS=(root=:root:"run as root, don't switch to current user"
+	detach=:detach:"detach subshell command" 
+	ext=e:ext:e 
+	o:optional:o)
+SHARG_SELECT_FN="parse_shargs_optsel"
+SHARG_VALUE_FN="parse_shargs_posval"
+parse_shargs $@
+
+# # uncomment to see parsing result
+echo "--------------------------"
+echo "list=${SHARG_LIST[@]}"
+for n in ${SHARG_LIST[@]}; do arg="SHARG_$n";echo "[$arg]=${!arg}"; done
+echo "values=${SHARG_VALUES[@]}"
+# exit 1
+echo "--------------------------"
+# ---------------
+
+#declare -g DEBUG_BY_LINE=yes	
+if [ -n "$SHARG_root" ]; then
+	asroot=1
+	# on non-root run switch to root
+	if [ $uid -gt 0 ]; then
+		runner="sudo -s "
+	else
+	# on root run do nothing
+		runner=
+	fi
+else
+	# on non-root run stay as current user
+#	if [ $uid -gt 0 ]; then
+#		runner=
+#	else
+	# on root run switch to user
+		runner="sudo -u $usr "
+#	fi
+fi
+
+if [ $uid -ne 0 ]; then
+	sudo true
+	if [ $? -gt 0 ]; then
+		echo "Authentication failed"
+		exit 1
+	fi
+	duso=sudo
+fi
+
+NS=$SHARG_ns
+if [ -z "$NS" ]; then
+    usage
+    exit 1
+fi
+prog=${SHARG_VALUES[0]}
+args=${SHARG_VALUES[@]:1}
+thescript=${SHARG_script}
+
+if [ "$prog" == "" ]; then
+	# on NS switching force reading profile, because bash won't do that
+	#if [ -n "$runner" ]; then
+	    prog="/usr/bin/bash --rcfile ~/.profile"
+	#else
+	#	prog=
+	#	args=
+	#fi
+elif [ "$USER" == "$default_user" ]; then
+	if [ "$prog" == "chromium" ]; then
+		prog="$conctldir/con-ctl exec chromium $NS"
+	elif [ "$prog" == "trillian" ]; then
+		prog="$conctldir/con-ctl exec trillian"
+	fi
+fi
+#args=$@
+VARS="export CURRENT_NETNS=$NS"
+
+if [ -n "$DEBUG" ]; then
+	DEBUGPREFIX="DEBUG=yes"
+fi
+
+if [ -n "$DEBUGPREFIX" ]; then
+	X20=" "	# 0x20 = 32 = <space>
+fi
+
+if [ -n "$SHARG_detach" ]; then
+	$duso ip netns exec $NS sh -c "echo 'Wellcome to ns:$NS';ip a s;$VARS;$DEBUGPREFIX$X20$runner$prog $args" &>/dev/null &
+else
+	$duso ip netns exec $NS sh -c "echo 'Wellcome to ns:$NS';ip a s;$VARS;$DEBUGPREFIX$X20$runner$prog $args"
+fi

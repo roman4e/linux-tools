@@ -1,0 +1,132 @@
+parse_shargs(){
+	# parses args as SHARG_<varname>
+	# parsed names list is SHARG_LIST
+	# if
+	local nextvalue=1
+	local argname
+	local skipallnext=0
+	local listnum=0
+	local valuesnum=0
+	local seqvaluenum=0
+	declare -g -a SHARG_LIST
+	declare -g -a SHARG_VALUES
+	declare -a _opts
+	local totalargs=$#
+
+	for optstr in $SHARG_OPTS
+	do
+		local optsarray=$(echo $optstr|tr ':' "\n")
+		local optshort=optsarray[0]
+		local optlong=optsarray[1]
+		local optopts=${optsarray:2}
+	done
+	# for p in SHARG_LONG; do
+	# 	local $pbase
+	# 	local $popts
+	# 	if [[ $p =~ .+:.* ]]; then
+	# 		$pbase=${p%:*}
+	# 		$popts=${p#*:}
+
+	# 	else
+	# 		$_opts[${#_opts}]=$p	
+	# 	fi
+	# done
+	while [ $# -gt 0 ]
+	do
+		local param="$1"
+		shift $nextvalue
+
+		if [ $skipallnext -gt 0 ]; then
+			SHARG_VALUES[valuesnum]="$param"
+			valuesnum=$((valuesnum+1))
+			continue
+		fi
+
+		local dbld=${param:0:2}
+		local psize=0
+		local argvalue="$1"
+		local argname=""
+
+		# if long option
+		if [ "$dbld" == "--" ]; then
+			psize=2
+			argnamebase=${param:$psize}
+			
+			# if -- then set flag all next args are values / no more options
+			if [ "$argnamebase" == "" ]; then
+				skipallnext=1
+				continue
+			fi
+			
+			# if arg has `=` the split on argname and its value
+			if [[ "$argnamebase" =~ .+=.* ]]; then
+				argname=${argnamebase%=*}
+				argvalue=${argnamebase#*=}
+				#nextvalue=1
+			else # otherway use next arg as value
+				argname="$argnamebase"
+				argvalue="yes"
+				#nextvalue=1
+			fi
+		# else suggest short option
+		elif [ "${dbld:0:1}" == "-" ]; then
+			psize=1
+			argname=${dbld:1:$psize}
+			#nextvalue=1
+			if [ ${#dbld} -gt 2 ]; then
+				argvalue=${dbld:2}
+				#nextvalue=1
+			else
+				argvalue="$2"
+			fi
+		fi
+				
+		if [ "$argname" ]; then
+			SHARG_LIST[listnum]="$argname"
+			listnum=$((listnum+1))
+			local couple=$($SHARG_SELECT_FN "$argname" "$argvalue")
+			local status=$?
+
+			if [ $status -gt 0 ]; then
+				echo "Error: unrecognized option \`$argname\`"
+				exit 1
+			fi
+
+			nextvalue=1
+			argname=${couple%:*}
+			argvalue=${couple#*:}
+			[ "$argname" == "$argvalue" ] && argvalue="yes"
+			declare -g SHARG_$argname="$argvalue"
+		else
+			if [ -n "$SHARG_VALUE_FN" ]; then
+				local argnum=$((seqvaluenum+1))
+				local couple=$($SHARG_VALUE_FN $argnum "$param" $totalargs)
+				local status=$?
+
+				if [ $status -gt 0 ]; then
+					echo "Error: invalid argument \`$param\`"
+					exit 1
+				fi
+
+				if [ -z "$couple" ]; then
+					SHARG_VALUES[valuesnum]="$param"
+					valuesnum=$((valuesnum+1))
+				else
+					argname=${couple%:*}
+					argvalue=${couple#*:}
+					if [ "$argname" == "$argvalue" ]; then
+						argvalue="$param"
+					fi
+					declare -g SHARG_$argname="$argvalue"
+					SHARG_LIST[listnum]="$argname"
+					listnum=$((listnum+1))
+				fi
+			else
+				# not an option just argument, no need to check, store only
+				SHARG_VALUES[valuesnum]="$param"
+				valuesnum=$((valuesnum+1))
+			fi
+			seqvaluenum=$((seqvaluenum+1))
+		fi
+	done
+}

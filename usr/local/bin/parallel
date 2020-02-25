@@ -1,0 +1,38 @@
+#!/bin/bash
+
+if [ "$1" == "-q" ]; then
+	quiet=yes
+	shift
+fi
+
+function getcpid() {
+    cpids=`pgrep -P $1|xargs`
+#    echo "cpids=$cpids"
+    for cpid in $cpids;
+    do
+        echo "$cpid"
+        getcpid $cpid
+    done
+}
+
+for cmd in "$@"; do {
+  [ -z "$quiet" ] && echo "Process \"$cmd\" started"
+  $cmd & pid=$!
+  PID_LIST+="$pid $(getcpid $pid) "
+} done
+
+kill_pidlist() {
+	for a in $PID_LIST; do
+		kill -9 $a &>/dev/null
+	done
+}
+
+#echo $PID_LIST
+trap "kill_pidlist" SIGINT
+
+[ -z "$quiet" ] && echo "Parallel processes have started"
+
+wait $PID_LIST
+
+[ -z "$quiet" ] && echo
+[ -z "$quiet" ] && echo "All processes have completed"

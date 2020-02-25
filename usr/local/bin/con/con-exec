@@ -1,0 +1,39 @@
+#!/bin/bash
+. $HOME/bin/fn/helpers
+[ -z "$CON_WORK_DIR" ] && echo "Script is a part of con-ctl" && exit 1
+
+# CONFIG
+#predefined=(bash chromium trillian)
+
+# AUTOCONFIG
+predefined=$(ls -1 $CON_WORK_DIR/cmd-* | cut -d- -f 2,2)
+
+#############################################
+# DON'T TOUCH
+
+predefined_joined=$(join_by ' ' ${predefined[@]})
+
+if [ -n "$DEBUG" ]; then
+	set -x
+fi
+
+externalcmd="$1"
+if [[ " ${predefined_joined} " =~ " ${externalcmd} " ]]; then
+	cmd0="$externalcmd"
+	joinedcmds="$cmd0"
+	shift
+else
+	joinedcmds=$(join_by "|" ${predefined[@]})
+	cmds=$(zenity --forms --add-combo="Select software" --combo-values="$joinedcmds" --add-entry="OR enter command" --separator=,)
+	
+	cmds=${cmds#,}
+	cmds=${cmds%,}
+	
+	cmd0=$(echo "$cmds"|cut -d, -f1,1)
+fi
+
+case "$cmd0" in
+	$joinedcmds) "$CON_WORK_DIR/cmd-$cmd0" $@ </dev/null &>/dev/null &;;
+	*) nohup $cmd0 "$*" &>/dev/null & ;;
+esac
+

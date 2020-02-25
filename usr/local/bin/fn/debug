@@ -1,0 +1,5 @@
+debug_handler() 
+{
+	local dkey="$1"
+	echo "[DEBUG[]]"
+}

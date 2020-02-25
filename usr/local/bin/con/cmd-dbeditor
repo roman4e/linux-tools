@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd $HOME/bin/DataGrip/bin/
+./datagrip.sh
+cd -
