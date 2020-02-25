@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+# Automatically fixes
+
+vidcard=0
+extdev=HDMI-A-1
+maindev=eDP-1
+brightness_step=1200
+
+fullextpath=$(readlink -f /sys/class/drm/card$vidcard-$extdev)
+fullmainpath=$(readlink -f /sys/class/drm/card$vidcard-$maindev)
+
+#set_brightness=/usr/bin/set-brightness
+#echo $fullpath $devstatus
+
+while [ -n "$1" ]; do
+if [ "$1" == "--set" ]; then
+	force=yes
+	shift
+fi
+if [ "$1" == "--fix" ]; then
+	dofix=yes
+	shift
+fi
+if [ "$1" = "--get" ]; then
+	getvalue=yes
+	shift
+fi
+if [ "$1" = "-?" ] || [ "$1" = "--help" ]; then
+	echo "This software automatically fixes brightness for HP notebooks"
+	echo "In case of single primary display, set to 25% if brightness=0 or brightness>75%"
+	echo "In case of mirrored display connected, set to 0 if brightness > 75%"
+	echo "Usage: brightness [--set <value>] [--fix] [--get]"
+fi
+next_brightness=${1-0}
+shift
+done
+
+get_brightness() {
+	local brightness=$(cat $fullmainpath/intel_backlight/brightness)
+	#brightness=$((brightness+0))
+	echo $brightness
+}
+
+get_max_brightness() {
+	local brightness=$(cat $fullmainpath/intel_backlight/max_brightness)
+	#brightness=$((brightness+0))
+	echo $brightness
+}
+
+calc_brightness_percent() {
+	local perc=$1
+	local maxbr=$(get_max_brightness)
+	local t=$((maxbr*perc/100))
+	local mod=$((t % brightness_step))
+	t=$((t - mod))
+	echo $t
+}
+
+#set_brightness() {
+#	local br=$1
+#	echo $br | sudo tee "$fullmainpath/intel_backlight/brightness"
+#}
+
+do_fix() {
+		local setb=$1
+		local maxb=$2
+		local minb=$3
+		local brightness=$(get_brightness)
+		#brightness=$((brightness+0))
+		local br75percent; [ -n "$maxb" ] && br75percent=$(calc_brightness_percent $maxb) || br75percent=$(calc_brightness_percent 75)
+		local br0percent;  [ -n "$minb" ] && br0percent=$(calc_brightness_percent $minb)  || br0percent=$(calc_brightness_percent 5)
+		local cursetb
+		#echo $brightness $br0percent
+		#echo $brightness $br75percent
+		if [ ${brightness} -gt ${br75percent} ]; then
+			cursetb=$setb
+		elif [ ${brightness} -lt ${br0percent} ]; then
+			cursetb=$setb
+		fi
+		if [ -n "$cursetb" ]; then
+			sudo set-brightness $setb
+		fi
+}
+
+if [ "$getvalue" == "yes" ]; then
+	echo $(get_brightness)
+	exit 0
+fi
+
+if [ "$force" == "yes" ]; then
+	tmpbr=$next_brightness
+	case $tmpbr in
+		max) next_brightness=$(get_max_brightness) ;;
+		min) next_brightness=$brightness_step ;; 
+		off) next_brightness=0 ;;
+		*%) next_brightness=$(calc_brightness_percent ${tmpbr::-1}) ;;
+	esac
+	sudo set-brightness $next_brightness
+	exit 0
+fi
+
+if [ "$dofix" = "yes" ]; then
+
+devstatus=$(head -n1 $fullextpath/status)
+#echo $next_brightness
+if [ "$devstatus" == "connected" ]; then
+	pp=$(xrandr -d :0 -q | grep --color=never ' connected '|grep HDMI | cut -d' ' -f 3,3|cut -d'+' -f 2,3)
+	if [ "$pp" = "0+0" ]; then # mirrored display
+		do_fix $next_brightness
+	fi
+elif [ "$devstatus" = "disconnected" ]; then
+	#there is something wrong. when monitor is off then it get 100% br
+	#pp=$(xrandr -d :0 -q | grep --color=never ' connected '|grep eDP-1 | cut -d' ' -f 3,3|cut -d'+' -f 2,3)
+	#if [ $next_brightness -eq 0 ]; then
+	#	next_brightness=$(calc_brightness_percent 25)
+	#fi
+	#if [ "$pp" = "primary" ]; then # primary display
+	#	do_fix $next_brightness 75
+	#fi
+fi
+
+fi # end do fix

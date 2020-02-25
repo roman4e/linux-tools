@@ -1,0 +1,48 @@
+#!/bin/bash
+
+vidcard=0
+extdev=HDMI-A-1
+maindev=eDP-1
+brightness_step=1200
+
+fullextpath=$(readlink -f /sys/class/drm/card$vidcard-$extdev)
+fullmainpath=$(readlink -f /sys/class/drm/card$vidcard-$maindev)
+
+if [ "$1" = "-?" ]; then
+    echo "Set display brightness."
+    echo "Usage: set-brightness <value>"
+    echo "<value> is a number between 0 and 100 (percents)"
+    exit 1
+fi
+
+if [ $(id -u) -gt 0 ]; then
+       echo "Root required"
+       exit 2
+fi
+
+get_max_brightness() {
+    local brightness=$(cat $fullmainpath/intel_backlight/max_brightness)
+    #brightness=$((brightness+0))
+    echo $brightness
+}
+
+
+calc_brightness_percent() {
+    local perc=$1
+    local maxbr=$(get_max_brightness)
+    local t=$((maxbr*perc/100))
+    local mod=$((t % brightness_step))
+    t=$((t - mod))
+    echo $t
+}
+
+
+br=$1
+case $br in
+    *%) brnum=$(calc_brightness_percent ${br::-1}) ;;
+    $([ $br -gt 100 ] && echo $br)) brnum=$br ;;
+    *) brnum=$(calc_brightness_percent $br) ;;
+esac
+echo $brnum > "$fullmainpath/intel_backlight/brightness"
+
+
